@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// Security model
+//   • Anyone can READ the resume + settings  -> the public page works for all.
+//   • Only an authenticated admin can WRITE   -> editing is locked down.
+//
+// The data lives in two documents:
+//   resume/main      (the full resume)
+//   settings/main    (theme, layout, toggles)
+//
+// "Admin" = any account that exists in the `admin` collection, keyed by UID.
+// Create that doc once from the Firebase console after creating your auth user
+// (see README). If you prefer a simpler single-admin setup, replace
+// isAdmin() with `request.auth != null`.
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admin/$(request.auth.uid));
+    }
+
+    // Public, read-only resume content.
+    match /resume/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admin registry: readable only by signed-in users, never writable from
+    // the client (manage it from the Firebase console).
+    match /admin/{uid} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
